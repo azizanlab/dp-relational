@@ -210,10 +210,21 @@ class QueryManager:
         data_sizes = [self.n_syn1, self.n_syn2] if is_synth \
             else [self.rel_dataset.table1.df.shape[0],self.rel_dataset.table2.df.shape[0]]
         data_size = data_sizes[table_num]
+        dim_counts = self.workload_dict[workload][["dim_1", "dim_2"][table_num]]
 
         offsets = np.zeros(shape=data_size, dtype=np.int_)
         for col in range(len(dimsizes)):
-            offsets += table[col] * dimsizes[col]
+            # Synthesizers can emit category-coded columns as float dtype (e.g. 3.0).
+            # Normalize to integer category indices and clamp to workload domain.
+            values = np.asarray(table[col])
+            if np.issubdtype(values.dtype, np.integer):
+                values = values.astype(np.int_, copy=False)
+            else:
+                values = np.rint(values).astype(np.int_, copy=False)
+
+            max_idx = max(int(dim_counts[col]) - 1, 0)
+            values = np.clip(values, 0, max_idx)
+            offsets += values * dimsizes[col]
 
         return offsets
 
